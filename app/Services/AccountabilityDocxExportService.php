@@ -87,8 +87,10 @@ class AccountabilityDocxExportService
             . '. Accomplishment = completed list points ÷ total points in sprint window (per person).',
             ['size' => 9, 'italic' => true, 'color' => '555555']
         );
-        $threshold = (float) ($document['expectation_threshold'] ?? 70);
-        $section->addText('Expectation threshold: ' . rtrim(rtrim(number_format($threshold, 2), '0'), '.') . '%', ['size' => 9, 'color' => '444444']);
+        $standardsLine = isset($document['performance_standards'])
+            ? \App\Support\PerformanceStandards::fromArray($document['performance_standards'])->summaryLine()
+            : 'Baseline ' . rtrim(rtrim(number_format((float) ($document['expectation_threshold'] ?? 80), 2), '0'), '.') . '%';
+        $section->addText('Performance standards: ' . DocxSafeText::stripIllegalXmlCharacters($standardsLine), ['size' => 9, 'color' => '444444']);
         $section->addTextBreak(1);
 
         $chartData = $this->extractChartData($document);

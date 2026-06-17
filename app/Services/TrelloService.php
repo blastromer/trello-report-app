@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\TeamAccomplishmentLists;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 
@@ -413,7 +414,7 @@ class TrelloService
         $normalized = strtolower(trim($listName));
 
         // Explicit lists that should always be treated as completed
-        $explicitCompletedLists = [
+        $explicitCompletedLists = array_merge([
             'for dev deployment/review (tiger/jan review)',
             'for dev deployment/review',
             'on dev environment',
@@ -422,13 +423,13 @@ class TrelloService
             'done / archive',
             'done/archive',
             'done/archived',
-            'done sprint',
             'archive done',
-        ];
+        ], TeamAccomplishmentLists::completedSprintNormalizedNames());
 
         // Explicit lists for in-progress
         $explicitInProgressLists = [
             'in dev',
+            'in development',
         ];
 
         // Explicit lists for todo
@@ -448,8 +449,13 @@ class TrelloService
             return 'completed';
         }
 
+        if (strpos($normalized, 'blocked') !== false) {
+            return 'blocked';
+        }
+
         if (in_array($normalized, $explicitInProgressLists, true) ||
             strpos($normalized, 'progress') !== false ||
+            strpos($normalized, 'development') !== false ||
             strpos($normalized, 'doing') !== false ||
             strpos($normalized, 'in progress') !== false) {
             return 'in_progress';

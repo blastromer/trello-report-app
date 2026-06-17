@@ -30,7 +30,7 @@ class LoginController extends Controller
         if (Auth::attempt($request->only('email', 'password'), $request->filled('remember'))) {
             $request->session()->regenerate();
 
-            return redirect()->intended('/trello/boards');
+            return redirect()->intended(route('home'));
         }
 
         throw ValidationException::withMessages([

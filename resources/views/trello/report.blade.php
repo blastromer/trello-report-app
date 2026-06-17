@@ -210,6 +210,7 @@
             max-height: 320px;
         }
         @media print {
+            .actions { display: none; }
             .chart-box { break-inside: avoid; }
         }
     </style>
@@ -217,6 +218,8 @@
 </head>
 <body>
     <div class="container">
+        @include('trello.partials.report-library-notice')
+
         <h1>{{ $boardReport->board_name }}</h1>
         <p class="subtitle">Report generated at: {{ $boardReport->generated_at->format('Y-m-d H:i:s') }}</p>
 
@@ -246,19 +249,21 @@
         @endif
 
         <div class="actions">
-            <a href="{{ route('trello.export', $boardReport->board_id) }}" class="btn btn-primary">
-                Export as CSV
-            </a>
+            @if($boardReport->exists)
+                <a href="{{ route('trello.report.csv', $boardReport) }}" class="btn btn-primary">
+                    Export as CSV
+                </a>
+            @endif
+            <button type="button" class="btn btn-primary" onclick="window.print()">Print / PDF</button>
             <a href="{{ route('trello.report.filter', $boardReport->board_id) }}" class="btn btn-secondary">
                 Generate New Report
             </a>
-            <a href="{{ route('trello.boards') }}" class="btn btn-secondary">
-                Back to Boards
+            @if($boardReport->exists)
+                <a href="{{ route('trello.saved-reports') }}" class="btn btn-secondary">Saved reports</a>
+            @endif
+            <a href="{{ route('trello.board.dashboard', $boardReport->board_id) }}" class="btn btn-secondary">
+                Back to board
             </a>
-            <form method="POST" action="{{ route('logout') }}" style="display: inline;">
-                @csrf
-                <button type="submit" class="btn btn-secondary">Logout</button>
-            </form>
         </div>
 
         <div class="section">
@@ -458,7 +463,7 @@
                         @foreach($report['cards'] as $card)
                             @php
                                 $normalizedListName = strtolower(trim($card['list_name']));
-                                $explicitCompletedLists = [
+                                $explicitCompletedLists = array_merge([
                                     'for dev deployment/review (tiger/jan review)',
                                     'for dev deployment/review',
                                     'on dev environment',
@@ -467,9 +472,8 @@
                                     'done / archive',
                                     'done/archive',
                                     'done/archived',
-                                    'done sprint',
                                     'archive done',
-                                ];
+                                ], \App\Support\TeamAccomplishmentLists::completedSprintNormalizedNames());
                                 $explicitInProgressLists = [
                                     'in dev',
                                 ];

@@ -13,6 +13,7 @@ class BoardReport extends Model
         'user_id',
         'board_id',
         'board_name',
+        'report_type',
         'report_data',
         'generated_at',
     ];
@@ -28,5 +29,30 @@ class BoardReport extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function resolvedType(): string
+    {
+        return $this->report_type ?? ($this->report_data['report_type'] ?? 'board');
+    }
+
+    public function typeLabel(): string
+    {
+        return match ($this->resolvedType()) {
+            'accountability' => 'Accountability',
+            'individual_kpi' => 'Individual KPI',
+            'team_performance' => 'Team performance',
+            default => 'Board',
+        };
+    }
+
+    public function viewUrl(): string
+    {
+        return match ($this->resolvedType()) {
+            'accountability' => route('trello.accountability.show', $this),
+            'individual_kpi' => route('trello.kpi.show', $this),
+            'team_performance' => route('trello.team.show', $this),
+            default => route('trello.report.show', $this),
+        };
     }
 }

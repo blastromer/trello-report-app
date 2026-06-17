@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\PerformanceStandards;
+
 /**
  * Builds accountability / sprint performance summaries from board report data.
  */
@@ -114,21 +116,83 @@ class AccountabilityReportService
     }
 
     /**
-     * Label for overall sprint vs expectation threshold.
+     * Story points on non-completed cards (in progress, todo, other lists) per team member.
+     *
+     * @param string[] $onlyMemberIds
+     * @param string[] $includeStatuses status_key values to count (default: pipeline / not done)
+     * @return array<string, array{member_id: string, name: string, points: float, card_count: int, cards: array<int, array{name: string, list_name: string, points: float, status_key: string}>}>
      */
-    public function expectationLabel(?float $overallPercent, float $threshold): string
-    {
-        if ($overallPercent === null) {
-            return 'No measurable points in this sprint window';
-        }
-        if ($overallPercent < $threshold) {
-            return 'Below Expectation';
-        }
-        if ($overallPercent > $threshold + 10) {
-            return 'Above Expectation';
+    public function computeMemberPipelinePoints(
+        array $reportData,
+        array $onlyMemberIds,
+        array $includeStatuses = ['in_progress', 'todo', 'other']
+    ): array {
+        $allowedMembers = array_flip($onlyMemberIds);
+        $allowedStatuses = array_flip($includeStatuses);
+        $byMember = [];
+
+        foreach ($onlyMemberIds as $id) {
+            $byMember[$id] = [
+                'member_id' => $id,
+                'name' => $this->memberName($reportData, $id),
+                'points' => 0.0,
+                'card_count' => 0,
+                'cards' => [],
+            ];
         }
 
-        return 'Meets Expectation';
+        foreach ($reportData['cards'] ?? [] as $card) {
+            $status = $card['status_key'] ?? 'other';
+            if ($status === 'completed' || !isset($allowedStatuses[$status])) {
+                continue;
+            }
+            $pts = (float) ($card['points'] ?? 0);
+            $ids = $card['member_ids'] ?? [];
+            foreach ($ids as $mid) {
+                if (!isset($allowedMembers[$mid]) || !isset($byMember[$mid])) {
+                    continue;
+                }
+                $byMember[$mid]['points'] += $pts;
+                $byMember[$mid]['card_count']++;
+                $byMember[$mid]['cards'][] = [
+                    'name' => (string) ($card['name'] ?? 'Untitled'),
+                    'list_name' => (string) ($card['list_name'] ?? ''),
+                    'points' => $pts,
+                    'status_key' => $status,
+                ];
+            }
+        }
+
+        return $byMember;
+    }
+
+    /**
+     * @param array<string, array> $byMember
+     * @param string[] $memberIds
+     * @return array<int, array>
+     */
+    public function membersOnlyForTeamPipeline(array $byMember, array $memberIds): array
+    {
+        $out = [];
+        foreach ($memberIds as $id) {
+            $out[] = $byMember[$id] ?? [
+                'member_id' => $id,
+                'name' => $id,
+                'points' => 0.0,
+                'card_count' => 0,
+                'cards' => [],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Label for overall sprint vs performance standards tiers.
+     */
+    public function expectationLabel(?float $overallPercent, PerformanceStandards $standards): string
+    {
+        return $standards->labelForPercent($overallPercent);
     }
 
     /**
@@ -219,24 +283,25 @@ class AccountabilityReportService
      *
      * @param array<int, array> $sprintsOut Blocks from buildSprintBlock + expectation_label
      */
-    public function suggestChallenges(array $sprintsOut, float $threshold, array $monthReport): string
+    public function suggestChallenges(array $sprintsOut, PerformanceStandards $standards, array $monthReport): string
     {
         $lines = [];
+        $floor = $standards->baselineFloor();
 
         foreach ($sprintsOut as $s) {
             $pct = $s['overall_accomplishment_percent'] ?? null;
-            if ($pct !== null && $pct < $threshold) {
+            if ($pct !== null && $pct < $floor) {
                 $lines[] = sprintf(
-                    '%s: overall team accomplishment was %.2f%%, below the %.0f%% expectation.',
+                    '%s: overall team accomplishment was %.2f%%, below the %.0f%% baseline floor.',
                     $s['label'],
                     $pct,
-                    $threshold
+                    $floor
                 );
             }
             foreach ($s['members'] ?? [] as $m) {
                 $total = (float) ($m['points_total'] ?? 0);
                 $rate = $m['accomplishment_rate'] ?? null;
-                if ($total > 0 && $rate !== null && $rate < $threshold) {
+                if ($total > 0 && $rate !== null && $rate < $floor) {
                     $lines[] = sprintf(
                         '%s — %s at %.2f%% accomplishment (story points in completed lists vs. total in that sprint window).',
                         $s['label'],
@@ -267,7 +332,7 @@ class AccountabilityReportService
         }
 
         if ($lines === []) {
-            $lines[] = 'No automatic issues flagged versus the expectation threshold; edit this section with real-world blockers (dependencies, reviews, leave, etc.).';
+            $lines[] = 'No automatic issues flagged versus the performance baseline; edit this section with real-world blockers (dependencies, reviews, leave, etc.).';
         }
 
         return implode("\n", array_values(array_unique($lines)));
@@ -313,7 +378,7 @@ class AccountabilityReportService
      *
      * @param array<int, array> $sprintsOut
      */
-    public function suggestContextInterpretation(array $sprintsOut, float $threshold, string $monthLabel): string
+    public function suggestContextInterpretation(array $sprintsOut, PerformanceStandards $standards, string $monthLabel): string
     {
         $parts = [];
         $parts[] = 'This section is generated from Trello: accomplishment rate is story points on completed pipeline lists divided by total points on cards in each sprint window for the selected team members. Card windows use the Date Completed custom field only.';
@@ -342,7 +407,7 @@ class AccountabilityReportService
             }
         }
 
-        $parts[] = sprintf('Expectation threshold: %.0f%%.', $threshold);
+        $parts[] = 'Performance standards: ' . $standards->summaryLine() . '.';
 
         return implode(' ', $parts);
     }
@@ -352,16 +417,17 @@ class AccountabilityReportService
      *
      * @param array<int, array> $sprintsOut
      */
-    public function suggestOverallOutlook(array $sprintsOut, array $monthReport, float $threshold): string
+    public function suggestOverallOutlook(array $sprintsOut, array $monthReport, PerformanceStandards $standards): string
     {
         $below = 0;
         $atOrAbove = 0;
+        $floor = $standards->baselineFloor();
         foreach ($sprintsOut as $s) {
             $pct = $s['overall_accomplishment_percent'] ?? null;
             if ($pct === null) {
                 continue;
             }
-            if ($pct < $threshold) {
+            if ($pct < $floor) {
                 $below++;
             } else {
                 $atOrAbove++;
@@ -375,8 +441,9 @@ class AccountabilityReportService
 
         if ($atOrAbove > 0 && $below === 0) {
             return sprintf(
-                'Sprint averages met the %.0f%% expectation across configured windows. In the reporting month, %d card(s) sat in completed lists; %d still in progress and %d in todo/backlog — use the Plans & next steps list to drive the next cycle.',
-                $threshold,
+                'Sprint averages met the %.0f%%–%.0f%% baseline expectation across configured windows. In the reporting month, %d card(s) sat in completed lists; %d still in progress and %d in todo/backlog — use the Plans & next steps list to drive the next cycle.',
+                $standards->baselineMin,
+                $standards->baselineMax,
                 $completed,
                 $inProg,
                 $todo
@@ -385,8 +452,8 @@ class AccountabilityReportService
 
         if ($below > 0) {
             return sprintf(
-                'One or more sprints landed below the %.0f%% accomplishment expectation. Prioritize finishing in-progress work (%d cards in month scope), rightsizing points, and clearing blockers next cycle.',
-                $threshold,
+                'One or more sprints landed below the %.0f%% baseline floor. Prioritize finishing in-progress work (%d cards in month scope), rightsizing points, and clearing blockers next cycle.',
+                $floor,
                 $inProg
             );
         }

@@ -37,8 +37,16 @@
 </head>
 <body>
     <div class="doc">
+        @include('trello.partials.report-library-notice')
+
         <h1>Team Accountability Reports</h1>
+        @php
+            $reportStandards = isset($document['performance_standards'])
+                ? \App\Support\PerformanceStandards::fromArray($document['performance_standards'])
+                : new \App\Support\PerformanceStandards(baselineMin: (float) ($document['expectation_threshold'] ?? 80));
+        @endphp
         <p class="meta">Monthly report — {{ $document['month_label'] }} · {{ $document['board_name'] }} · Generated {{ $boardReport->generated_at->format('Y-m-d H:i') }}
+            <br><span class="muted">Performance standards: {{ $reportStandards->summaryLine() }}</span>
             @php $np = $document['narrative_period'] ?? null; @endphp
             @if(is_array($np) && !empty($np['from']) && !empty($np['to']))
                 <br><span class="muted">Narrative &amp; sprint card scope: <strong>Date Completed</strong> between {{ $np['from'] }} and {{ $np['to'] }} (cards without that field are excluded).</span>
@@ -193,15 +201,18 @@
 
         <div class="actions">
             <button type="button" class="btn btn-primary" onclick="window.print()">Print / PDF</button>
-            <a href="{{ route('trello.accountability.docx', $boardReport) }}" class="btn btn-primary">Download Word (.docx)</a>
+            @if($boardReport->exists)
+                <a href="{{ route('trello.accountability.docx', $boardReport) }}" class="btn btn-primary">Download Word (.docx)</a>
+                <a href="{{ route('trello.saved-reports') }}" class="btn btn-secondary">Saved reports</a>
+            @endif
             <a href="{{ route('trello.accountability.form', $document['board_id']) }}" class="btn btn-secondary">New report</a>
-            <a href="{{ route('trello.report.filter', $document['board_id']) }}" class="btn btn-secondary">Board report</a>
-            <a href="{{ route('trello.boards') }}" class="btn btn-secondary">Boards</a>
+            <a href="{{ route('trello.board.dashboard', $document['board_id']) }}" class="btn btn-secondary">Back to board</a>
         </div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            var threshold = {{ (float) ($document['expectation_threshold'] ?? 70) }};
+            var baselineMin = {{ (float) $reportStandards->baselineMin }};
+            var baselineMax = {{ (float) $reportStandards->baselineMax }};
             var el1 = document.getElementById('chartAccountabilitySprints');
             if (el1 && typeof Chart !== 'undefined') {
                 new Chart(el1, {
@@ -223,7 +234,7 @@
                             tooltip: {
                                 callbacks: {
                                     footer: function () {
-                                        return 'Threshold: ' + threshold + '%';
+                                        return 'Baseline: ' + baselineMin + '%–' + baselineMax + '%';
                                     }
                                 }
                             }
@@ -237,23 +248,29 @@
                         }
                     },
                     plugins: [{
-                        id: 'expectationThresholdLine',
+                        id: 'baselineBand',
                         afterDraw: function (chart) {
                             var scale = chart.scales.y;
-                            if (!scale || threshold < scale.min || threshold > scale.max) return;
-                            var y = scale.getPixelForValue(threshold);
+                            if (!scale) return;
                             var ctx = chart.ctx;
+                            var yTop = scale.getPixelForValue(baselineMax);
+                            var yBottom = scale.getPixelForValue(baselineMin);
                             ctx.save();
+                            ctx.fillStyle = 'rgba(5, 150, 105, 0.12)';
+                            ctx.fillRect(chart.chartArea.left, yTop, chart.chartArea.right - chart.chartArea.left, yBottom - yTop);
                             ctx.setLineDash([6, 4]);
-                            ctx.strokeStyle = '#dc2626';
+                            ctx.strokeStyle = '#059669';
                             ctx.lineWidth = 1;
-                            ctx.beginPath();
-                            ctx.moveTo(chart.chartArea.left, y);
-                            ctx.lineTo(chart.chartArea.right, y);
-                            ctx.stroke();
-                            ctx.fillStyle = '#dc2626';
+                            [baselineMin, baselineMax].forEach(function (val) {
+                                var y = scale.getPixelForValue(val);
+                                ctx.beginPath();
+                                ctx.moveTo(chart.chartArea.left, y);
+                                ctx.lineTo(chart.chartArea.right, y);
+                                ctx.stroke();
+                            });
+                            ctx.fillStyle = '#047857';
                             ctx.font = '11px sans-serif';
-                            ctx.fillText('Expectation ' + threshold + '%', chart.chartArea.left + 4, y - 4);
+                            ctx.fillText('Baseline ' + baselineMin + '%–' + baselineMax + '%', chart.chartArea.left + 4, yTop - 4);
                             ctx.restore();
                         }
                     }]

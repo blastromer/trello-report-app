@@ -45,6 +45,9 @@
 </head>
 <body @if(!empty($standaloneExport)) class="standalone-export" @endif>
     <div class="doc">
+        @if(empty($standaloneExport))
+            @include('trello.partials.report-library-notice')
+        @endif
         @if(!empty($standaloneExport))
             <p class="export-hint muted" style="font-size:0.82rem;margin:0 0 16px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;color:#0c4a6e;">
                 <strong>Google Docs:</strong> Upload this file to Google Drive, then right-click → <em>Open with → Google Docs</em>.
@@ -290,11 +293,13 @@
         @if(empty($standaloneExport))
         <div class="actions">
             <button type="button" class="btn btn-primary" onclick="window.print()">Print / PDF</button>
-            <a href="{{ route('trello.kpi.html', $boardReport) }}" class="btn btn-primary" title="Same layout as this page. Upload to Google Drive → Open with Google Docs.">Download HTML (Google Docs)</a>
-            <a href="{{ route('trello.kpi.docx', $boardReport) }}" class="btn btn-secondary" title="Microsoft Word format; layout may differ from this page.">Download Word (.docx)</a>
+            @if($boardReport->exists)
+                <a href="{{ route('trello.kpi.html', $boardReport) }}" class="btn btn-primary" title="Same layout as this page. Upload to Google Drive → Open with Google Docs.">Download HTML (Google Docs)</a>
+                <a href="{{ route('trello.kpi.docx', $boardReport) }}" class="btn btn-secondary" title="Microsoft Word format; layout may differ from this page.">Download Word (.docx)</a>
+                <a href="{{ route('trello.saved-reports') }}" class="btn btn-secondary">Saved reports</a>
+            @endif
             <a href="{{ route('trello.kpi.form', $document['board_id']) }}" class="btn btn-secondary">New KPI report</a>
-            <a href="{{ route('trello.accountability.form', $document['board_id']) }}" class="btn btn-secondary">Accountability</a>
-            <a href="{{ route('trello.boards') }}" class="btn btn-secondary">Boards</a>
+            <a href="{{ route('trello.board.dashboard', $document['board_id']) }}" class="btn btn-secondary">Back to board</a>
         </div>
         @endif
     </div>

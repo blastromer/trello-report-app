@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'visible_board_ids',
     ];
 
     /**
@@ -40,7 +41,35 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'visible_board_ids' => 'array',
     ];
+
+    /**
+     * Whether the user has a saved subset of boards (not "show all").
+     */
+    public function hasBoardFilter(): bool
+    {
+        $ids = $this->visible_board_ids;
+
+        return is_array($ids) && $ids !== [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $boards Trello board payloads
+     * @return array<int, array<string, mixed>>
+     */
+    public function filterVisibleBoards(array $boards): array
+    {
+        if (!$this->hasBoardFilter()) {
+            return $boards;
+        }
+
+        $allowed = array_flip($this->visible_board_ids);
+
+        return array_values(array_filter($boards, function (array $board) use ($allowed) {
+            return isset($allowed[$board['id'] ?? '']);
+        }));
+    }
 
     /**
      * Get the Trello token for the user.

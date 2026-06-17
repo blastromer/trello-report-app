@@ -59,7 +59,7 @@
             @csrf
 
             @php
-                $selectedAssignees = old('assignees', []);
+                $selectedAssignees = old('assignees', $defaultAssignees ?? []);
                 $profDims = \App\Support\ProfessionalismKpiReference::dimensionKeys();
                 $profLabels = \App\Support\ProfessionalismKpiReference::dimensionShortLabels();
             @endphp
@@ -99,18 +99,12 @@
 
             <div class="form-group">
                 <label>Team members on this report <span style="color:#b91c1c;">*</span></label>
-                <div class="checkbox-group">
-                    @foreach($members as $member)
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="m_{{ $member['id'] }}" name="assignees[]" value="{{ $member['id'] }}"
-                                {{ in_array($member['id'], old('assignees', []), true) ? 'checked' : '' }}>
-                            <label for="m_{{ $member['id'] }}">{{ $member['fullName'] ?? $member['username'] ?? 'Unknown' }}</label>
-                        </div>
-                    @endforeach
-                </div>
-                @error('assignees')
-                    <div style="color:#b91c1c;font-size:0.875rem;margin-top:6px;">{{ $message }}</div>
-                @enderror
+                @include('trello.partials.team-member-checkboxes', [
+                    'members' => $members,
+                    'boardId' => $boardId,
+                    'defaultAssignees' => $defaultAssignees ?? [],
+                    'required' => true,
+                ])
                 <small style="color:#6b7280;">Only checked members appear in the KPI report.</small>
             </div>
 
@@ -264,10 +258,11 @@
                 @endforeach
             </div>
 
+            @include('trello.partials.save-report-option')
+
             <div class="actions">
                 <button type="submit" class="btn btn-primary">Generate KPI report</button>
-                <a href="{{ route('trello.accountability.form', $boardId) }}" class="btn btn-secondary">Accountability report</a>
-                <a href="{{ route('trello.boards') }}" class="btn btn-secondary">Boards</a>
+                <a href="{{ route('trello.board.dashboard', $boardId) }}" class="btn btn-secondary">Back to board</a>
             </div>
         </form>
     </div>

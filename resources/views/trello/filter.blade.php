@@ -150,16 +150,14 @@
 
             @if(!empty($members))
             <div class="form-group">
-                <label>Assignees (Select one or more)</label>
-                <div class="checkbox-group">
-                    @foreach($members as $member)
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="member_{{ $member['id'] }}" name="assignees[]" value="{{ $member['id'] }}" {{ in_array($member['id'], old('assignees', [])) ? 'checked' : '' }}>
-                            <label for="member_{{ $member['id'] }}">{{ $member['fullName'] ?? $member['username'] ?? 'Unknown' }}</label>
-                        </div>
-                    @endforeach
-                </div>
-                <small style="color: #6b7280; font-size: 0.875rem;">Show only cards assigned to selected members</small>
+                <label>Assignees (select your team or specific members)</label>
+                @include('trello.partials.team-member-checkboxes', [
+                    'members' => $members,
+                    'boardId' => $boardId,
+                    'defaultAssignees' => $defaultAssignees ?? [],
+                    'checkboxPrefix' => 'member',
+                ])
+                <small style="color: #6b7280; font-size: 0.875rem;">Show only cards assigned to selected members. Leave all unchecked for everyone.</small>
             </div>
             @endif
 
@@ -184,10 +182,11 @@
             </div>
             @endif
 
+            @include('trello.partials.save-report-option')
+
             <div class="actions">
                 <button type="submit" class="btn btn-primary">Generate Report</button>
-                <a href="{{ route('trello.accountability.form', $boardId) }}" class="btn btn-secondary">Accountability report</a>
-                <a href="{{ route('trello.boards') }}" class="btn btn-secondary">Cancel</a>
+                <a href="{{ route('trello.board.dashboard', $boardId) }}" class="btn btn-secondary">Back to board</a>
             </div>
         </form>
     </div>

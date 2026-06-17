@@ -38,6 +38,6 @@ class RegisterController extends Controller
 
         Auth::login($user);
 
-        return redirect('/trello/boards');
+        return redirect()->route('home');
     }
 }
